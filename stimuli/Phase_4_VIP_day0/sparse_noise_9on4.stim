@@ -1,0 +1,36 @@
+"""
+sparse_noise_9on4.stim
+
+Loads a sparse noise movie.  Movie must be UINT8 and shape (t, h, w)
+
+"""
+import numpy as np
+import shutil
+from camstim.misc import checkDirs, ImageStimNumpyuByte
+
+moviesource = "//allen/programs/braintv/workgroups/nc-ophys/ImageData/Dan/stimuli/Phase_4_VIP_day0/sparse_noise_9deg_on_4deg_grid.npy"
+moviepath = "C:/camstim/movies/sparse_noise_9deg_on_4deg_grid.npy"
+
+if os.path.isfile(moviepath):
+    pass
+else:
+    print("Movie not saved locally, copying...")
+    checkDirs(os.path.dirname(moviepath))
+    shutil.copy(moviesource, moviepath)
+    print("... Done!")
+
+noisematrix = np.load(moviepath)
+
+stimulus = Stimulus(ImageStimNumpyuByte(window,
+                                        image=noisematrix[0],
+                                        size=[1260, 720],
+                                        units='pix'),
+                    sweep_params={
+                        'ReplaceImage': (noisematrix, 0),
+                    },
+                    sweep_length=0.25,
+                    start_time=0.0,
+                    runs=1,
+                    shuffle=False,
+                    save_sweep_table=False,
+                    )
