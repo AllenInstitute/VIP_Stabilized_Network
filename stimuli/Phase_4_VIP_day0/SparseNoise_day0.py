@@ -1,7 +1,6 @@
 """
 SparseNoise_day0.py
 """
-import sys
 from psychopy import visual
 from camstim import Stimulus, SweepStim
 from camstim import Foraging
@@ -11,7 +10,7 @@ import numpy as np
 # Create display window
 window = Window(fullscr=True,
                 monitor='Gamma1.Luminance50',
-                screen=1,
+                screen=1,#TODO: verify screen number for DeepScope
                 warp=Warp.Spherical,
                 )
 
@@ -27,9 +26,11 @@ sn.set_display_sequence(sn_ds)
 
 # kwargs
 params = {
+    'syncsqrloc': (510,360),#TODO: verify for DeepScope
+    'syncsqrsize': (50,140),#TODO: verify for DeepScope
     'syncpulse': True,
     'syncpulseport': 1,
-    'syncpulselines': [5,6],  # frame, start/stop
+    'syncpulselines': [1,2],#TODO: verify for DeepScope
     'trigger_delay_sec': 5.0,
 }
 

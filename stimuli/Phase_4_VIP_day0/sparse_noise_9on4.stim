@@ -32,5 +32,5 @@ stimulus = Stimulus(ImageStimNumpyuByte(window,
                     start_time=0.0,
                     runs=1,
                     shuffle=False,
-                    save_sweep_table=False,
+                    save_sweep_table=True,
                     )

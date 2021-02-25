@@ -21,7 +21,7 @@ posy = param_file.get("posy", 0.0)    #in degrees
 # Create display window
 window = Window(fullscr=True,
                 monitor='Gamma1.Luminance50',
-                screen=1,
+                screen=1,#TODO: verify screen number for DeepScope
                 warp=Warp.Spherical,
                 )
 
@@ -54,9 +54,11 @@ behavior_flashes.set_display_sequence(behavior_flashes_ds)
 
 # kwargs
 params = {
+    'syncsqrloc': (510,360),#TODO: verify for DeepScope
+    'syncsqrsize': (50,140),#TODO: verify for DeepScope
     'syncpulse': True,
     'syncpulseport': 1,
-    'syncpulselines': [5,6],  # frame, start/stop
+    'syncpulselines': [1,2],#TODO: verify for DeepScope
     'trigger_delay_sec': 5.0,
 }
 
