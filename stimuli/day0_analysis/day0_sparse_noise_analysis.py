@@ -21,7 +21,8 @@ PIXEL_SIZE = 9.3 #degrees
 
 def run_analysis(imaging_duration=3400,#seconds
                  frames_per_sec=30,
-                 param_path=''#TODO:define this path for the Deepscope!
+                 param_path='',#TODO:define this path for the Deepscope!
+                 output_path=r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\'
                  ):
     
     exptpath = r'C:\Repos\DeepDiveDayOne\401001\new_position\column5\timeseries'
@@ -33,15 +34,93 @@ def run_analysis(imaging_duration=3400,#seconds
     
     mean_sweep_response, sweep_response = get_mean_sweep_response(fluorescence,stim_table,frames_per_sec=frames_per_sec)
     
-    condition_response_means, condition_responses = calculate_pixel_responses(mean_sweep_response,sweep_response,stim_table)
+    condition_response_means = calculate_pixel_responses(mean_sweep_response,stim_table)
     
-    plot_sweep_response(condition_response_means,exptpath)
+    p_val = test_peak_significance(mean_sweep_response,stim_table)
+    if p_val < 0.0001:
+        best_x, best_y = calculate_population_RF_coordinates(condition_response_means)
+    else:
+        best_x, best_y = (0.0,0.0)
+    
+    plot_RF_maps(condition_response_means,stim_table,best_x,best_y,exptpath)
 
-def plot_sweep_response(condition_response_means,stim_table,exptpath):
+    write_coordinate_to_file(mouse_ID,best_X,best_Y,output_path)
+
+    print('Population Center X: '+str(best_x)+' , Y: '+str(best_y))
+
+def write_coordinate_to_file(mouse_ID,best_X,best_Y,output_path):
     
-    resp_max = np.max(condition_response_means)
     
-    (num_y,num_x,num_colors) = np.shape(condition_response_means)
+
+def plot_RF_maps(condition_mat,stim_table,best_x,best_y,exptpath):
+    
+    #TODO: calculate a better max and min
+    resp_max = np.max(condition_mat)
+   
+    plt.figure(figsize=(20,20))
+    ax1 = plt.subplot(211)
+    ax2 = plt.subplot(212)     
+    
+    plot_single_RF_map(ax1,condition_mat[:,:,0],'Black pixels',resp_max)
+    plot_single_RF_map(ax2,condition_mat[:,:,1],'White pixels',resp_max)
+    
+    ax2.set_xlabel('Population Center X: '+str(best_x)+' , Y: '+str(best_y))
+    
+    plt.savefig(exptpath+'/population_RF.png')
+    plt.close() 
+    
+def plot_single_RF_map(ax,RF_map,title_str,r_max):
+    
+    x_degrees, y_degrees = get_XY_positions(RF_map)
+    
+    ax.imshow(RF_map,cmap='RdBu',vmin=-r_max,vmax=r_max,interpolation='none',origin='lower')
+    ax.set_title(title_str)
+    ax.set_xticks(np.arange(len(x_degrees)))
+    ax.set_xticklabels([str(round(x,1)) for x in x_degrees])
+    ax.set_yticks(np.arange(len(y_degrees)))
+    ax.set_yticklabels([str(round(y,1)) for y in y_degrees])   
+
+def test_peak_significance(mean_sweep_response,stim_table,num_shuffles=100000):
+    
+    num_sweeps = len(stim_table)
+    num_conditions = get_number_of_conditions(stim_table)
+    sweeps_per_condition = int(num_sweeps/num_conditions)
+    
+    shuffle_peaks = np.zeros((num_shuffles,))
+    for ns in range(num_shuffles):
+        shuffle_sweeps = np.random.choice(num_sweeps,size=(num_sweeps,))
+        shuffle_sweep_responses = mean_sweep_response[shuffle_sweeps]
+        
+        shuffle_condition_responses = np.mean(shuffle_sweep_responses.reshape(num_conditions,sweeps_per_condition),axis=1)
+        shuffle_peaks[ns] =  shuffle_condition_responses.max()
+        
+    actual_response_means = calculate_pixel_responses(mean_sweep_response,stim_table)
+    actual_peak = actual_response_means.max()
+    
+    p_val = (shuffle_peaks >= actual_peak).mean()
+    
+    return p_val
+    
+def calculate_population_RF_coordinates(condition_response_means):
+    
+    response_map = condition_response_means.sum(axis=2)
+    
+    x_degrees, y_degrees = get_XY_positions(condition_response_means)
+    
+    rectified_responses = np.where(response_map>0,response_map,0.0)
+    summed_response = rectified_responses.sum()
+    x_comp = rectified_responses * x_degrees.reshape(1,len(x_degrees))
+    y_comp = rectified_responses * y_degrees.reshape(len(y_degrees),1)
+    centroid_x = round(x_comp.sum() / summed_response,1)
+    centroid_y = round(y_comp.sum() / summed_response,1)    
+    
+    return centroid_x, centroid_y
+
+def get_XY_positions(condition_mat):
+    
+    num_y = condition_mat.shape[0]
+    num_x = condition_mat.shape[1]
+
     origin_x_idx = int(num_x/2) - 1 #indices for pixel at center of monitor
     origin_y_idx = int(num_y/2) - 1
     
@@ -51,45 +130,19 @@ def plot_sweep_response(condition_response_means,stim_table,exptpath):
     y_degrees = GRID_SPACING*np.arange(num_y)
     y_degrees -= y_degrees[origin_y_idx]
     
-    plt.figure(figsize=(20,20))
-    ax1 = plt.subplot(211)
-    ax2 = plt.subplot(212)     
-    
-    ax1.imshow(condition_response_means[:,:,0],cmap='RdBu',vmin=-resp_max,vmax=resp_max,interpolation='none',origin='lower')
-    ax2.imshow(condition_response_means[:,:,1],cmap='RdBu',vmin=-resp_max,vmax=resp_max,interpolation='none',origin='lower')
-    
-    ax1.set_title('Black pixels')
-    ax2.set_title('White pixels')
-    ax1.set_xticks(np.arange(num_x))
-    ax1.set_xticklabels([str(round(x,1)) for x in x_degrees])
-    ax1.set_yticks(np.arange(num_y))
-    ax1.set_yticklabels([str(round(y,1)) for y in y_degrees])
-    
-    #calculate the centroid of the maps
-    rectified_responses = np.where(condition_response_means>0,condition_response_means,0.0)
-    summed_resp = rectified_responses.sum()
-    x_comp = rectified_responses * x_degrees.reshape(1,num_x)
-    y_comp = rectified_responses * y_degrees.reshape(num_y,1)
-    centroid_x = round(x_comp.sum() / summed_response,1)
-    centroid_y = round(y_comp.sum() / summed_response,1)
-    
-    ax2.set_xlabel('Population Center X: '+str(centroid_x)+' , Y: '+str(centroid_y))
-    
-    plt.savefig(exptpath+'/population_RF.png')
-    plt.close() 
-    
-    print('Population Center X: '+str(centroid_x)+' , Y: '+str(centroid_y))
+    return x_degrees, y_degrees
 
-def calculate_pixel_responses(mean_sweep_response,sweep_response,stim_table):
+def get_number_of_conditions(stim_table):
+    x_pos = get_stim_attribute(stim_table, 'Pixel_X')
+    y_pos = get_stim_attribute(stim_table, 'Pixel_Y')
+    colors = get_stim_attribute(stim_table, 'Pixel_Color')
+    return len(x_pos) * len(y_pos) * len(colors)
+
+def calculate_pixel_responses(mean_sweep_response,stim_table):
     
-    x_pos = np.unique(stim_table['Pixel_X'].values)
-    x_pos = x_pos[np.argwhere(np.isfinite(x_pos))]
-    y_pos = np.unique(stim_table['Pixel_Y'].values)
-    y_pos = y_pos[np.argwhere(np.isfinite(y_pos))]
-    
-    (num_sweeps,sweeplength) = np.shape(sweep_response)
-    
-    condition_responses = np.zeros((len(y_pos),len(x_pos),2,sweeplength))
+    x_pos = get_stim_attribute(stim_table, 'Pixel_X')
+    y_pos = get_stim_attribute(stim_table, 'Pixel_Y')
+
     condition_response_means = np.zeros((len(y_pos),len(x_pos),2))
     for iy,y in enumerate(y_pos):
         is_y = stim_table['Pixel_Y'].values == y
@@ -99,11 +152,15 @@ def calculate_pixel_responses(mean_sweep_response,sweep_response,stim_table):
                 is_color = stim_table['Pixel_Color'].values == color
                 is_condition = is_y & is_x & is_color
                 condition_sweeps = np.argwhere(is_condition)[:,0]
-                condition_responses[iy,ix,i_color] = np.mean(sweep_response[condition_sweeps],axis=0)
                 condition_response_means[iy,ix,i_color] = np.mean(mean_sweep_response[condition_sweeps])
                 
-    return condition_response_means, condition_responses
+    return condition_response_means
     
+def get_stim_attribute(stim_table,attribute_name):
+    attr = np.unique(stim_table[attribute_name].values)
+    attr = attr[np.argwhere(np.isfinite(attr))]
+    return attr
+
 def get_mean_sweep_response(fluorescence,stim_table,frames_per_sec):
 
     sweeplength = int(stim_table.End[1] - stim_table.Start[1])
@@ -115,7 +172,7 @@ def get_mean_sweep_response(fluorescence,stim_table,frames_per_sec):
     for i in range(num_sweeps):
         response_start = int(stim_table['Start'][i]+delaylength)
         response_end = int(stim_table['Start'][i] + sweeplength + delaylength)
-        baseline_start = int(start-sweeplength)
+        baseline_start = int(stim_table['Start'][i]-sweeplength)
         sweep_f = fluorescence[response_start:response_end]
         baseline_f = fluorescence[baseline_start:response_start]
         sweep_dff = 100*((sweep_f/np.mean(baseline_f))-1)
@@ -133,7 +190,7 @@ def get_wholefield_fluorescence(im_directory,num_frames):
     curr_frame = 0
     for f in os.listdir(im_directory):
         if f.endswith('.tif'):
-            print "Processing " + f
+            print("Processing " + f)
             this_stack = load_single_tif(im_directory+'/'+f)
             num_stack_frames = np.shape(this_stack)[0]
             for i in range(num_stack_frames):
@@ -162,17 +219,17 @@ def create_stim_table(exptpath,param_path):
             if row.start >= display_sequence[seg,1]:
                 stimulus_table.start[index] = stimulus_table.start[index] - display_sequence[seg,1] + display_sequence[seg+1,0]
     stimulus_table.end = stimulus_table.start+stimulus_table.dif
-    print len(stimulus_table)
+    print(len(stimulus_table))
     stimulus_table = stimulus_table[stimulus_table.end <= display_sequence[-1,1]]
     stimulus_table = stimulus_table[stimulus_table.start <= display_sequence[-1,1]]            
-    print len(stimulus_table)
+    print(len(stimulus_table))
     sync_table = pd.DataFrame(np.column_stack((twop_frames[stimulus_table['start']],twop_frames[stimulus_table['end']])), columns=('Start', 'End'))
            
     #populate stimulus parameters
     sweep_order = data['stimuli'][0]['sweep_order']
     sweep_order =  sweep_order[:len(stimulus_table)]    
           
-    sn_params = np.load(savepath+'sparse_noise_sweep_info.npz')
+    sn_params = np.load(param_path+'sparse_noise_sweep_info.npz')
     
     #populate sync_table 
     sync_table['Pixel_Color'] = np.NaN
@@ -194,9 +251,9 @@ def load_sync(exptpath):
         if f.endswith('.h5'):
             syncpath = os.path.join(exptpath, f)
             syncMissing = False
-            print "Sync file:", f
+            print("Sync file: "+ f)
     if syncMissing:
-        print "No sync file"
+        print("No sync file")
         sys.exit()
 
     #load the sync data from .h5 and .pkl files
@@ -218,11 +275,11 @@ def load_sync(exptpath):
     channel_test = []    
     for i in channels:
         channel_test.append(any(channels[i]))
-        print i + ' syncs : ' + str(len(channels[i]))
+        print(i + ' syncs : ' + str(len(channels[i])))
     if all(channel_test):
-        print "All channels present."
+        print("All channels present.")
     else:
-        print "Not all channels present. Sync test failed."
+        print("Not all channels present. Sync test failed.")
         sys.exit()        
         
     # find the start of the photodiode 1-second pulses:        
@@ -233,7 +290,7 @@ def load_sync(exptpath):
     first_transition_time = photodiode_transition[first_transition_idx]
     first_stim_vsync  = stim_vsync_fall[0]
     first_delay = first_transition_time - first_stim_vsync
-    print 'delay between first stim_vsync and photodiode: ' + str(first_delay)    
+    print('delay between first stim_vsync and photodiode: ' + str(first_delay))
     
     #test and correct for photodiode transition errors
     
@@ -253,7 +310,7 @@ def load_sync(exptpath):
     ptd_errors = []
     while any(ptd_rise_diff[ptd_start:ptd_end] < 1.8):
         error_frames = np.where(ptd_rise_diff[ptd_start:ptd_end]<1.8)[0] + ptd_start
-        print "Photodiode error detected. Number of frames:", len(error_frames)
+        print("Photodiode error detected. Number of frames: " + len(error_frames))
         photodiode_rise = np.delete(photodiode_rise, error_frames[-1])
         ptd_errors.append(photodiode_rise[error_frames[-1]])
         ptd_end-=1
@@ -278,7 +335,7 @@ def load_sync(exptpath):
 #    plt.show()    
     
     delay = np.mean(delay_rise[:-1])   
-    print "monitor delay: " , delay
+    print("monitor delay: " + delay)
     
     #adjust stimulus time with monitor delay
     stim_time = stim_vsync_fall + delay
@@ -297,7 +354,7 @@ def load_sync(exptpath):
             break
             
     if acquisition_ends_early>0:
-        print "Acquisition ends before stimulus"
+        print("Acquisition ends before stimulus")
         
     return twop_frames, twop_vsync_fall, stim_vsync_fall, photodiode_rise
 
@@ -309,9 +366,9 @@ def load_pkl(exptpath):
         if f.endswith('.pkl'):
             logpath = os.path.join(exptpath, f)
             logMissing = False
-            print "Stimulus log:", f
+            print("Stimulus log: " + f)
     if logMissing:
-        print "No pkl file"
+        print("No pkl file")
         sys.exit()
         
     #load data from pkl file
