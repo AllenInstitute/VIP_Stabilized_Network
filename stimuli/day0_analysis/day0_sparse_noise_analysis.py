@@ -9,10 +9,11 @@ import os, sys
 import numpy as np
 import pandas as pd
 
-import cPickle as pickle
-from sync import Dataset
+#import cPickle as pickle
+#from sync import Dataset
 import tifffile as tiff
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 BLACK = 0
 WHITE = 255
@@ -22,10 +23,11 @@ PIXEL_SIZE = 9.3 #degrees
 def run_analysis(imaging_duration=3400,#seconds
                  frames_per_sec=30,
                  param_path='',#TODO:define this path for the Deepscope!
-                 output_path=r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\'
+                 output_path='/Users/danielm/Desktop/stimuli/'#r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\'
                  ):
     
-    exptpath = r'C:\Repos\DeepDiveDayOne\401001\new_position\column5\timeseries'
+    mouse_ID = 123456
+    exptpath = '/Users/danielm/Desktop/stimuli/'#r'C:\Repos\DeepDiveDayOne\401001\new_position\column5\timeseries'
     num_frames = 102000#TODO: enter the actual number of frames!
     
     stim_table = create_stim_table(exptpath,param_path)
@@ -33,6 +35,8 @@ def run_analysis(imaging_duration=3400,#seconds
     fluorescence = get_wholefield_fluorescence(exptpath,num_frames)
     
     mean_sweep_response, sweep_response = get_mean_sweep_response(fluorescence,stim_table,frames_per_sec=frames_per_sec)
+    
+    #stim_table, mean_sweep_response = test_set()
     
     condition_response_means = calculate_pixel_responses(mean_sweep_response,stim_table)
     
@@ -42,17 +46,42 @@ def run_analysis(imaging_duration=3400,#seconds
     else:
         best_x, best_y = (0.0,0.0)
     
-    plot_RF_maps(condition_response_means,stim_table,best_x,best_y,exptpath)
+    plot_RF_maps(condition_response_means,stim_table,best_x,best_y,mouse_ID,exptpath)
 
-    write_coordinate_to_file(mouse_ID,best_X,best_Y,output_path)
+    write_coordinate_to_file(mouse_ID,best_x,best_y,output_path)
 
     print('Population Center X: '+str(best_x)+' , Y: '+str(best_y))
 
-def write_coordinate_to_file(mouse_ID,best_X,best_Y,output_path):
+def test_set():
     
+    num_sweeps = 12152
+    param_path = '/Users/danielm/Desktop/stimuli/day0_analysis/'
     
+    sn_params = np.load(param_path+'sparse_noise_sweep_info.npz')
+    stim_table = pd.DataFrame(np.zeros((num_sweeps,2)), columns=('Start', 'End'))
+    stim_table['Start'] = np.round(np.arange(num_sweeps)*7.5 + 10)
+    stim_table['End'] = stim_table['Start'] + 7
+    stim_table['Pixel_Color'] = np.array(sn_params['sweep_color'])
+    stim_table['Pixel_X'] = np.array(sn_params['sweep_x'])
+    stim_table['Pixel_Y'] = np.array(sn_params['sweep_y'])
+    
+    mean_sweep_response = np.random.normal(0.0,1.0,size=(num_sweeps,))
+    condition_to_increase = (np.array(sn_params['sweep_x']) == 10) & (np.array(sn_params['sweep_y']) == 5)
+    condition_idx = np.argwhere(condition_to_increase)
+    mean_sweep_response[condition_idx] += 3
 
-def plot_RF_maps(condition_mat,stim_table,best_x,best_y,exptpath):
+    return stim_table, mean_sweep_response    
+
+def write_coordinate_to_file(mouse_ID,best_x,best_y,output_path):
+    
+    datetime_str = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = str(mouse_ID)+'_'+datetime_str+'_coordinates.txt'
+    
+    f = open(output_path+filename,'w')
+    f.write('('+str(best_x)+','+str(best_y)+')')
+    f.close()
+
+def plot_RF_maps(condition_mat,stim_table,best_x,best_y,mouse_ID,exptpath):
     
     #TODO: calculate a better max and min
     resp_max = np.max(condition_mat)
@@ -66,14 +95,14 @@ def plot_RF_maps(condition_mat,stim_table,best_x,best_y,exptpath):
     
     ax2.set_xlabel('Population Center X: '+str(best_x)+' , Y: '+str(best_y))
     
-    plt.savefig(exptpath+'/population_RF.png')
+    plt.savefig(exptpath+'/population_RF_'+str(mouse_ID)+'.png')
     plt.close() 
     
 def plot_single_RF_map(ax,RF_map,title_str,r_max):
     
     x_degrees, y_degrees = get_XY_positions(RF_map)
     
-    ax.imshow(RF_map,cmap='RdBu',vmin=-r_max,vmax=r_max,interpolation='none',origin='lower')
+    ax.imshow(RF_map,cmap='RdBu_r',vmin=-r_max,vmax=r_max,interpolation='none',origin='lower')
     ax.set_title(title_str)
     ax.set_xticks(np.arange(len(x_degrees)))
     ax.set_xticklabels([str(round(x,1)) for x in x_degrees])
