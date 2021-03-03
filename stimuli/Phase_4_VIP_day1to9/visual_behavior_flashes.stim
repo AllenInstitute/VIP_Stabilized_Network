@@ -8,7 +8,7 @@ import numpy as np
 import shutil
 from camstim.misc import checkDirs, ImageStimNumpyuByte
 
-moviesource = "//allen/programs/braintv/workgroups/nc-ophys/ImageData/Dan/stimuli/Phase_4_VIP_day1to9/visual_behavior_images.npy"
+moviesource = "//allen/programs/mindscope/workgroups/vipssn/stimuli/Phase_4_VIP_day1to9/visual_behavior_images.npy"
 moviepath = "C:/camstim/movies/visual_behavior_images.npy"
 
 if os.path.isfile(moviepath):
