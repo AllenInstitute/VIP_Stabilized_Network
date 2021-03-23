@@ -9,7 +9,7 @@ import os, sys
 import numpy as np
 import pandas as pd
 
-#import cPickle as pickle
+import pickle
 #from sync import Dataset
 import tifffile as tiff
 import matplotlib.pyplot as plt
@@ -402,7 +402,7 @@ def load_pkl(exptpath):
         
     #load data from pkl file
     f = open(logpath, 'rb')
-    data = pickle.load(f)
+    data = pickle.load(f,encoding='latin1')
     f.close()
     
     return data

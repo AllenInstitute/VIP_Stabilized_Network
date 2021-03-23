@@ -10,13 +10,14 @@ import numpy as np
 
 # optional param file
 if len(sys.argv) > 1:
-    import json
-    with open(sys.argv[1], 'r') as f:
-        param_file = json.load(f)
+    if sys.argv[1].find('.json')>-1:
+        import json
+        with open(sys.argv[1], 'r') as f:
+            param_file = json.load(f)
 else:
-    param_file = {}
-posx = param_file.get("posx", 0.0)    #in degrees
-posy = param_file.get("posy", 0.0)    #in degrees
+    param_file = {'target_pos':[0.0,0.0]}
+posx = param_file['target_pos'][0]    #in degrees
+posy = param_file['target_pos'][1]    #in degrees
 
 # Create display window
 window = Window(fullscr=True,
@@ -54,11 +55,11 @@ behavior_flashes.set_display_sequence(behavior_flashes_ds)
 
 # kwargs
 params = {
-    'syncsqrloc': (510,360),#TODO: verify for DeepScope
-    'syncsqrsize': (50,140),#TODO: verify for DeepScope
+    #'syncsqrloc': (510,360),
+    #'syncsqrsize': (50,140),
     'syncpulse': True,
     'syncpulseport': 1,
-    'syncpulselines': [1,2],#TODO: verify for DeepScope
+    #'syncpulselines': [1,2],
     'trigger_delay_sec': 5.0,
 }
 
