@@ -9,13 +9,13 @@ from camstim import Window, Warp
 import numpy as np
 
 # optional param file
+param_file = {'target_pos':[0.0,0.0]}
 if len(sys.argv) > 1:
     if sys.argv[1].find('.json')>-1:
         import json
         with open(sys.argv[1], 'r') as f:
             param_file = json.load(f)
-else:
-    param_file = {'target_pos':[0.0,0.0]}
+
 posx = param_file['target_pos'][0]    #in degrees
 posy = param_file['target_pos'][1]    #in degrees
 
