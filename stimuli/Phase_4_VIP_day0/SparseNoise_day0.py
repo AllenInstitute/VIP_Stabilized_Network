@@ -26,11 +26,11 @@ sn.set_display_sequence(sn_ds)
 
 # kwargs
 params = {
-    'syncsqrloc': (510,360),#TODO: verify for DeepScope
-    'syncsqrsize': (50,140),#TODO: verify for DeepScope
+#    'syncsqrloc': (510,360),#TODO: verify for DeepScope
+#    'syncsqrsize': (50,140),#TODO: verify for DeepScope
     'syncpulse': True,
     'syncpulseport': 1,
-    'syncpulselines': [1,2],#TODO: verify for DeepScope
+#    'syncpulselines': [1,2],#TODO: verify for DeepScope
     'trigger_delay_sec': 5.0,
 }
 
