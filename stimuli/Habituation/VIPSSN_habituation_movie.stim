@@ -1,0 +1,6 @@
+import os
+import shutil
+import numpy as np
+from camstim.misc import ImageStimNumpyuByte, checkDirs
+moviesource = r'\\allen\programs\braintv\workgroups\nc-ophys\ImageData\Dan\movie_clips_targeted_experiments\ds_warped_PEsacc640_001_train.npy'
+stimulus = MovieStim(movie_path=moviesource,window=window,frame_length=2.0/60.0,size=(1920, 1200),start_time=0.0,stop_time=None,flip_v=True,runs=6,)
