@@ -14,8 +14,8 @@ window = Window(fullscr=True,
                 warp=Warp.Disabled
                 )
 
-network_path = r'\\allen\programs\mindscope\workgroups\vipssn\stimuli\Habituation\\'
-stim_path = network_path + 'VIPSSN_habituation_movie.stim'
+local_path = r'C:\\ProgramData\AIBS_MPE\camstim\resources\VIPSSN\\'
+stim_path = local_path + 'VIPSSN_habituation_movie.stim'
 stim = Stimulus.from_file(stim_path, window)
     
 stim_ds = [(0,2400)]
