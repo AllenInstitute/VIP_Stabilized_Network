@@ -31,7 +31,7 @@ params = {'syncsqr': True,
 
 # create SweepStim instance
 ss = SweepStim(window,
-               stimuli=stim,
+               stimuli=[stim],
                pre_blank_sec=2,
                post_blank_sec=2,
                params=params,
