@@ -9,8 +9,9 @@ import os, sys
 import numpy as np
 import pandas as pd
 
+import json
 import pickle
-#from sync import Dataset
+from sync import Dataset
 import tifffile as tiff
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -20,15 +21,33 @@ WHITE = 255
 GRID_SPACING = 4.65 #degrees
 PIXEL_SIZE = 9.3 #degrees
 
-def run_analysis(imaging_duration=3400,#seconds
-                 frames_per_sec=30,
-                 param_path='',#TODO:define this path for the Deepscope!
-                 output_path='/Users/danielm/Desktop/stimuli/'#r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\'
+def run_analysis(frames_per_sec=30,
+                 num_frames=102000,#TODO: read the actual number of frames directly from the 2P acquisition timeseries!
+                 mouse_ID = 123456,
+                 exptpath = r'C:\Repos\DeepDiveDayOne\401001\new_position\column5\timeseries',#'/Users/danielm/Desktop/stimuli/'#
+                 param_path='/programs/mindscope/workgroups/vipssn/stimuli/day0_analysis/',#TODO:define this path for the Deepscope!
+                 output_path=r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\'#'/Users/danielm/Desktop/stimuli/'
                  ):
     
-    mouse_ID = 123456
-    exptpath = '/Users/danielm/Desktop/stimuli/'#r'C:\Repos\DeepDiveDayOne\401001\new_position\column5\timeseries'
-    num_frames = 102000#TODO: enter the actual number of frames!
+    # Runs the entire analysis end-to-end
+    #
+    # INPUTS
+    #
+    # frames_per_sec (type: int): 2P acquisition frame rate in Hz
+    #
+    # num_frames (type: int): the total number of frames in the 2P acquisition movie. In a future update,
+    #               this value will be directly read from the 2P movie provided in exptpath.
+    #
+    # mouse_ID (type: int): unique specimen ID for labeling the output files
+    #
+    # exptpath (type: str): a path to a directory containing 1) stim pkl file,
+    #                        2) sync h5 file, and 3) 2P acquisition movie.
+    #
+    # param_path (type: str): a path to a directory containing sparse_noise_sweep_info.npz
+    #
+    # output_path (type: str): a path to a directory to write 1) an RF map png
+    #                           and 2) a json containing coordinates to be read
+    #                           by the day1_to_9 stimulus script.
     
     stim_table = create_stim_table(exptpath,param_path)
     
@@ -48,7 +67,8 @@ def run_analysis(imaging_duration=3400,#seconds
     
     plot_RF_maps(condition_response_means,stim_table,best_x,best_y,mouse_ID,exptpath)
 
-    write_coordinate_to_file(mouse_ID,best_x,best_y,output_path)
+    #write_coordinate_to_file(mouse_ID,best_x,best_y,output_path)
+    write_coordinate_to_json(mouse_ID,best_x,best_y,output_path)
 
     print('Population Center X: '+str(best_x)+' , Y: '+str(best_y))
 
@@ -71,6 +91,16 @@ def test_set():
     mean_sweep_response[condition_idx] += 3
 
     return stim_table, mean_sweep_response    
+
+def write_coordinate_to_json(mouse_ID,best_x,best_y,output_path):
+    
+    datetime_str = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = str(mouse_ID)+'_'+datetime_str+'_coordinates.json'
+    
+    coordinate_dict = {'target_pos':[best_x,best_y]}
+    
+    with open(output_path+filename, 'w') as f:
+        json.dump(coordinate_dict, f)
 
 def write_coordinate_to_file(mouse_ID,best_x,best_y,output_path):
     
