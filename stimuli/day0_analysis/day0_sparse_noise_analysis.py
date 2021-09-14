@@ -11,7 +11,7 @@ import pandas as pd
 
 import json
 import pickle
-from sync import Dataset
+from sync_py3 import Dataset
 import tifffile as tiff
 import matplotlib.pyplot as plt
 from datetime import datetime
