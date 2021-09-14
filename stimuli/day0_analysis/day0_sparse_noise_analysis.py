@@ -9,6 +9,7 @@ import os, sys
 import numpy as np
 import pandas as pd
 
+import h5py
 import json
 import pickle
 from sync_py3 import Dataset
@@ -21,23 +22,15 @@ WHITE = 255
 GRID_SPACING = 4.65 #degrees
 PIXEL_SIZE = 9.3 #degrees
 
-def run_analysis(frames_per_sec=30,
-                 num_frames=102000,#TODO: read the actual number of frames directly from the 2P acquisition timeseries!
-                 mouse_ID = 123456,
-                 exptpath = r'C:\Repos\DeepDiveDayOne\401001\new_position\column5\timeseries',#'/Users/danielm/Desktop/stimuli/'#
-                 param_path='/programs/mindscope/workgroups/vipssn/stimuli/day0_analysis/',#TODO:define this path for the Deepscope!
-                 output_path=r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\'#'/Users/danielm/Desktop/stimuli/'
+def run_analysis(mouse_ID = 123456,
+                 exptpath = r'C:\Users\danielm\Desktop\day0_test\\', # r'C:\Repos\DeepDiveDayOne\401001\new_position\column5\timeseries',#'/Users/danielm/Desktop/stimuli/'#
+                 param_path='//allen/programs/mindscope/workgroups/vipssn/stimuli/day0_analysis/',
+                 output_path=r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\',#'/Users/danielm/Desktop/stimuli/'
                  ):
     
     # Runs the entire analysis end-to-end
     #
     # INPUTS
-    #
-    # frames_per_sec (type: int): 2P acquisition frame rate in Hz
-    #
-    # num_frames (type: int): the total number of frames in the 2P acquisition movie. In a future update,
-    #               this value will be directly read from the 2P movie provided in exptpath.
-    #
     # mouse_ID (type: int): unique specimen ID for labeling the output files
     #
     # exptpath (type: str): a path to a directory containing 1) stim pkl file,
@@ -50,8 +43,10 @@ def run_analysis(frames_per_sec=30,
     #                           by the day1_to_9 stimulus script.
     
     stim_table = create_stim_table(exptpath,param_path)
-    
-    fluorescence = get_wholefield_fluorescence(exptpath,num_frames)
+
+    fluorescence = get_wholefield_fluorescence(exptpath,output_path)
+        
+    frames_per_sec = get_frame_rate(stim_table) 
     
     mean_sweep_response, sweep_response = get_mean_sweep_response(fluorescence,stim_table,frames_per_sec=frames_per_sec)
     
@@ -65,12 +60,17 @@ def run_analysis(frames_per_sec=30,
     else:
         best_x, best_y = (0.0,0.0)
     
-    plot_RF_maps(condition_response_means,stim_table,best_x,best_y,mouse_ID,exptpath)
+    plot_RF_maps(condition_response_means,stim_table,best_x,best_y,mouse_ID,output_path)
 
-    #write_coordinate_to_file(mouse_ID,best_x,best_y,output_path)
     write_coordinate_to_json(mouse_ID,best_x,best_y,output_path)
 
     print('Population Center X: '+str(best_x)+' , Y: '+str(best_y))
+
+def get_frame_rate(stim_table,sweep_duration=0.25):
+        
+    mean_sweep_frames = np.mean(stim_table['End'].values - stim_table['Start'].values)
+    
+    return int(np.round(mean_sweep_frames / sweep_duration))
 
 def test_set():
     
@@ -125,7 +125,7 @@ def plot_RF_maps(condition_mat,stim_table,best_x,best_y,mouse_ID,exptpath):
     
     ax2.set_xlabel('Population Center X: '+str(best_x)+' , Y: '+str(best_y))
     
-    plt.savefig(exptpath+'/population_RF_'+str(mouse_ID)+'.png')
+    plt.savefig(exptpath+'/population_RF_'+str(mouse_ID)+'.png',dpi=300)
     plt.close() 
     
 def plot_single_RF_map(ax,RF_map,title_str,r_max):
@@ -234,30 +234,62 @@ def get_mean_sweep_response(fluorescence,stim_table,frames_per_sec):
         baseline_start = int(stim_table['Start'][i]-sweeplength)
         sweep_f = fluorescence[response_start:response_end]
         baseline_f = fluorescence[baseline_start:response_start]
-        sweep_dff = 100*((sweep_f/np.mean(baseline_f))-1)
+        sweep_dff = 100*((sweep_f/np.nanmean(baseline_f))-1)
         sweep_response[i,:] = sweep_f
-        mean_sweep_response[i] = np.mean(sweep_dff)
+        mean_sweep_response[i] = np.nanmean(sweep_dff)
    
     return mean_sweep_response, sweep_response
 
 def load_single_tif(file_path):  
     return tiff.imread(file_path)
 
-def get_wholefield_fluorescence(im_directory,num_frames):  
+def get_wholefield_fluorescence(im_directory,output_path,MAX_FRAMES=200000):  
     
-    avg_fluorescence = np.zeros((num_frames,))
-    curr_frame = 0
-    for f in os.listdir(im_directory):
-        if f.endswith('.tif'):
-            print("Processing " + f)
-            this_stack = load_single_tif(im_directory+'/'+f)
+    output_filepath = output_path+'wholefield_fluorescence.npy'
+    if os.path.isfile(output_filepath):
+        avg_fluorescence = np.load(output_filepath)
+    else:
+        im_filenames = get_2P_filenames(im_directory)
+        num_planes = len(im_filenames)
+        
+        avg_fluorescence = np.zeros((MAX_FRAMES,))
+        
+        if num_planes==1:#Bessel
+            this_stack = load_single_tif(im_directory+'/'+im_filenames['0'])
             num_stack_frames = np.shape(this_stack)[0]
             for i in range(num_stack_frames):
-                if curr_frame<num_frames:
-                    avg_fluorescence[curr_frame] = np.mean(this_stack[i,:,:])
-                    curr_frame += 1
-            this_stack = None
+                avg_fluorescence[i] = np.mean(this_stack[i,:,:])
+            avg_fluorescence = avg_fluorescence[:num_stack_frames]
+        elif num_planes>1:#Multiplane
+            for i_plane in range(num_planes):
+                print('Averaging plane '+str(i_plane)+'...')
+                if i_plane!=1:
+                    f = h5py.File(im_directory+'/'+im_filenames[str(i_plane)])
+                    this_stack = np.array(f['data'])
+                    num_stack_frames = np.shape(this_stack)[0]
+                    for i in range(num_stack_frames):
+                        avg_fluorescence[i_plane+i*num_planes] = np.mean(this_stack[i,:,:])
+                    f.close()
+        np.save(output_filepath,avg_fluorescence)
+            
     return avg_fluorescence
+   
+def get_2P_filenames(im_directory):
+    
+    #Multiplane
+    filenames = {}
+    for f in os.listdir(im_directory):
+        if f.endswith('.h5') and f.find('plane')>-1:
+            plane_number = f[-4]
+            filenames[plane_number] = f
+    
+    #Bessel
+    if len(filenames.keys())==0:
+        for f in os.listdir(im_directory):
+            if f.endswith('timeseries.tiff'):
+                filenames['0'] = f
+                
+    return filenames
     
 def create_stim_table(exptpath,param_path):
     
@@ -307,7 +339,7 @@ def load_sync(exptpath):
     #verify that sync file exists in exptpath
     syncMissing = True
     for f in os.listdir(exptpath):
-        if f.endswith('.h5'):
+        if f.endswith('_sync.h5'):
             syncpath = os.path.join(exptpath, f)
             syncMissing = False
             print("Sync file: "+ f)
@@ -317,13 +349,14 @@ def load_sync(exptpath):
 
     #load the sync data from .h5 and .pkl files
     d = Dataset(syncpath)
+    print(d.line_labels)
     
     #set the appropriate sample frequency
     sample_freq = d.meta_data['ni_daq']['counter_output_freq']
     
     #get sync timing for each channel
-    twop_vsync_fall = d.get_falling_edges('2p_vsync')/sample_freq
-    stim_vsync_fall = d.get_falling_edges('stim_vsync')[1:]/sample_freq #eliminating the DAQ pulse
+    twop_vsync_fall = d.get_falling_edges('vsync_2p')/sample_freq
+    stim_vsync_fall = d.get_falling_edges('vsync_stim')[1:]/sample_freq #eliminating the DAQ pulse
     
     photodiode_rise = d.get_rising_edges('stim_photodiode')/sample_freq
     photodiode_fall = d.get_falling_edges('stim_photodiode')/sample_freq
@@ -394,7 +427,7 @@ def load_sync(exptpath):
 #    plt.show()    
     
     delay = np.mean(delay_rise[:-1])   
-    print("monitor delay: " + delay)
+    print("monitor delay: " + str(delay))
     
     #adjust stimulus time with monitor delay
     stim_time = stim_vsync_fall + delay
