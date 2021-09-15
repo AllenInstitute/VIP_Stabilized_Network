@@ -23,9 +23,10 @@ GRID_SPACING = 4.65 #degrees
 PIXEL_SIZE = 9.3 #degrees
 
 def run_analysis(mouse_ID = 123456,
-                 exptpath = r'C:\Users\danielm\Desktop\day0_test\\', # r'C:\Repos\DeepDiveDayOne\401001\new_position\column5\timeseries',#'/Users/danielm/Desktop/stimuli/'#
+                 exptpath = r'S:\\scientifica_ophys\\data\1126880923\\',
+                 is_bessel = False,
                  param_path='//allen/programs/mindscope/workgroups/vipssn/stimuli/day0_analysis/',
-                 output_path=r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\',#'/Users/danielm/Desktop/stimuli/'
+                 output_path=r'C:\\ProgramData\\AIBS_MPE\\script_outputs\\',
                  ):
     
     # Runs the entire analysis end-to-end
@@ -44,7 +45,10 @@ def run_analysis(mouse_ID = 123456,
     
     stim_table = create_stim_table(exptpath,param_path)
 
-    fluorescence = get_wholefield_fluorescence(exptpath,output_path)
+    image_directory = exptpath
+    if is_bessel:
+        image_directory = exptpath + 'timeseries\\'
+    fluorescence = get_wholefield_fluorescence(image_directory,output_path)
         
     frames_per_sec = get_frame_rate(stim_table) 
     
