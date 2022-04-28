@@ -10,10 +10,10 @@ import numpy as np
 
 # optional param file
 param_file = {'target_pos':[0.0,0.0]}
-if len(sys.argv) > 1:
-    if sys.argv[1].find('.json')>-1:
+for arg_str in sys.argv:
+    if arg_str.find('coordinates.json')>-1:
         import json
-        with open(sys.argv[1], 'r') as f:
+        with open(arg_str, 'r') as f:
             param_file = json.load(f)
 
 posx = param_file['target_pos'][0]    #in degrees
