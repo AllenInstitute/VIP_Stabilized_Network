@@ -47,7 +47,7 @@ def whole_trick(exptpath,session_ID):
 
     condition_responses, blank_sweep_responses = compute_mean_condition_responses(sweep_table['size_by_contrast'],
                                                                                   size_by_contrast_mse_dff.T)
-    #print(condition_responses)
+    print(condition_responses)
     
     plot_population_tuning(condition_responses,blank_sweep_responses,savepath)
     plot_single_cell_tuning(condition_responses,
@@ -64,6 +64,7 @@ def plot_population_tuning(condition_responses,blank_responses,savepath):
     for nc in range(num_neurons):
         condition_responses[nc] = condition_responses[nc] - blank_responses[nc]
         
+    #blank-out stimulus conditions that were not presented
     condition_responses[:,:,0,0] = 0
     condition_responses[:,:,2,0] = 0
     condition_responses[:,:,4,0] = 0
@@ -350,11 +351,56 @@ def get_session_df():
                     (1143779068,'Vip',598130,4),
                     (1144578662,'Vip',598130,5),
                     (1144819429,'Vip',598130,6),
+                    
                     (1144953459,'Vip',594263,6),
+                    
+                    (1169157869,'Vip',616082,6),
+                    (1170175289,'Vip',616082,8),
+                    (1170365425,'Vip',616082,9),
+                    
+                    (1169253181,'Vip',616085,1),
+                    (1170229215,'Vip',616085,3),
+                    (1176593023,'Vip',616085,4),
+                    (1173241117,'Vip',616085,5),
+                    (1173750915,'Vip',616085,6),
+                    (1176214242,'Vip',616085,7),
+                    (1174570559,'Vip',616085,8),
+                    (1174812495,'Vip',616085,9),
+                    
+                    (1176560554,'Vip',619408,1),
+                    (1176779001,'Vip',619408,2),
+                    
                     (1145351299,'Sst',598892,2),
-                    (1161561259,'Sst',613523,0),
+                    
                     (1163170091,'Sst',613523,2),
                     (1163554066,'Sst',613523,3),
+                    
+                    (1173180948,'Sst',615853,1),
+                    (1173409438,'Sst',615853,2),
+                    (1173698354,'Sst',615853,3),
+                    (1173955682,'Sst',615853,4),
+                    (1174522035,'Sst',615853,5),
+                    (1174750543,'Sst',615853,6),
+                    (1175024638,'Sst',615853,7),
+                    (1175250452,'Sst',615853,8),
+                    (1175478209,'Sst',615853,9),
+                    
+                    (1169218245,'Sst',615858,5),
+                    (1175323842,'Sst',615858,6),
+                    (1170214686,'Sst',615858,7),
+                    (1170409463,'Sst',615858,8),
+                    (1172993266,'Sst',615858,9),
+                    
+                    (1173918056,'Sst',618935,1),
+                    (1174492415,'Sst',618935,2),
+                    (1175219013,'Sst',618935,3),
+                    (1175447089,'Sst',618935,4),
+                    (1176085819,'Sst',618935,5),
+                    (1176338780,'Sst',618935,6),
+                    (1176522368,'Sst',618935,7),
+                    (1176743288,'Sst',618935,8),
+                    
+                    
                     ]
     
     session_df = pd.DataFrame(data=np.zeros((len(session_info),4)),
