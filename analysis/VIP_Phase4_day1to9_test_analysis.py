@@ -13,115 +13,110 @@ import h5py
 import matplotlib.pyplot as plt
 
 from StimTable import stim_table as st
-import chisq_categorical as chi
+from chisq import chisq_categorical as chi
 
+def main():
+    
+    datapath = '/Users/danielm/Desktop/stim_sessions/'
+    
+    #load DataFrame that describes all sessions in the dataset
+    session_df = get_session_df()
+
+    #run whole analysis for each session:
+    for index, row in session_df.iterrows():
+        MID = int(row['mouse_ID'])
+        day = int(row['Day'])
+        session_ID = int(row['session_ID'])
+        
+        exptpath = to_exptpath(datapath,
+                               row['cre_line'],
+                               MID,
+                               day
+                               )
+        
+        print('Running analysis for MID '+str(MID)+' day '+str(day))
+        
+        whole_trick(exptpath,session_ID)
+    
 def whole_trick(exptpath,session_ID):
     
+    #check that stim.pkl file exists in the exptpath; uses assert
+    exptpath_has_stim_pkl(exptpath,session_ID)
+    
+    #define where to save outputs; for now, just put them in the exptpath
     savepath = exptpath
-    sweep_table = st.SizeByContrast_tables(exptpath)
     
-    sweep_table['size_by_contrast'] = sweep_table_to_downsampled(sweep_table['size_by_contrast'])
-    sweep_table['visual_behavior_flashes'] = sweep_table_to_downsampled(sweep_table['visual_behavior_flashes'])
-    
-    print(sweep_table)
-    print(np.unique(sweep_table['size_by_contrast']['Size'].values))
+    #get dict of sweep_tables, one for sizeXcontrast and one for image flashes
+    sweep_table = get_sweep_table_dict(session_ID,exptpath,savepath)
 
+    #frame rate can be determined directly from the stim tables
     frame_rate = get_frame_rate(sweep_table['size_by_contrast'])
     print('frame rate: '+str(frame_rate))
+    
+    #using dF/F until time constant is fixed for these 2X downsampled timeseries
     dff = load_dff_traces(exptpath)
     print(np.shape(dff))
     
+    #mean_sweep_responses has shape (num_neurons,num_sweeps)
     size_by_contrast_mse_dff = get_mean_sweep_response(dff,
                                                         sweep_table['size_by_contrast'],
                                                         frame_rate,
                                                         savepath,
                                                         'SizeByContrast',
                                                         'dff')
-    print(np.shape(size_by_contrast_mse_dff))
-
+    
+    #find cells with significant tuning across size and contrast conditions via bootstrapped Chi-sq test
     p_vals = chi_square_all_conditions(sweep_table['size_by_contrast'],
                                         size_by_contrast_mse_dff.T,
                                         session_ID,
                                         savepath)    
-    print(p_vals)
 
+    #take simple average (mean) across sweeps of each stimulus condition
     condition_responses, blank_sweep_responses = compute_mean_condition_responses(sweep_table['size_by_contrast'],
                                                                                   size_by_contrast_mse_dff.T)
-    print(condition_responses)
     
+    #plot average tuning curve across all neurons 
+    #    (can update to only include significantly-tuned neurons: e.g., p_vals<SIG_THRESH)
     plot_population_tuning(condition_responses,blank_sweep_responses,savepath)
+    
+    #same for each neuron's tuning curve
     plot_single_cell_tuning(condition_responses,
                             blank_sweep_responses,
                             p_vals,
                             savepath)
     
+def exptpath_has_stim_pkl(exptpath,session_ID):
+    assert os.path.isfile(exptpath+str(session_ID)+'_stim.pkl')
+    
 def plot_population_tuning(condition_responses,blank_responses,savepath):
     
-    num_neurons = condition_responses.shape[0]
-    directions, contrasts, sizes = grating_params()
-    plt.figure(figsize=(10,10))
-        
-    for nc in range(num_neurons):
-        condition_responses[nc] = condition_responses[nc] - blank_responses[nc]
-        
-    #blank-out stimulus conditions that were not presented
-    condition_responses[:,:,0,0] = 0
-    condition_responses[:,:,2,0] = 0
-    condition_responses[:,:,4,0] = 0
-    condition_responses[:,:,0,1] = 0
-    condition_responses[:,:,2,1] = 0
-    condition_responses[:,:,4,1] = 0
+    fig_filepath = savepath+'population_tuning.png'
+    if not os.path.isfile(fig_filepath):
     
-    population_responses = np.mean(condition_responses,axis=0)
-    
-    for i_size,size in enumerate(sizes):
-        
-        ax = plt.subplot(3,1,i_size+1)
-        ax.imshow(population_responses[:,:,i_size],
-                  cmap='RdBu_r',
-                  vmin=-np.max(population_responses),
-                  vmax=np.max(population_responses),
-                  interpolation='none')
-        
-        ax.set_xticks(np.arange(len(contrasts)))
-        ax.set_xticklabels([str(int(100*x)) + '%' for x in contrasts])
-        ax.set_yticks(np.arange(len(directions)))
-        ax.set_yticklabels([str(int(x)) for x in directions])
-        
-        ax.set_ylabel('Direction')
-        ax.set_title('Size: '+str(size))
-        
-        if i_size==2:
-            ax.set_xlabel('Contrast')
-    
-    plt.savefig(savepath+'population_tuning.png',dpi=300)
-    plt.close()
-    
-def plot_single_cell_tuning(condition_responses,blank_responses,p_vals,savepath):
-    
-    num_neurons = condition_responses.shape[0]
-    directions, contrasts, sizes = grating_params()
-    
-    for nc in range(num_neurons):
+        num_neurons = condition_responses.shape[0]
+        directions, contrasts, sizes = grating_params()
         plt.figure(figsize=(10,10))
+            
+        for nc in range(num_neurons):
+            condition_responses[nc] = condition_responses[nc] - blank_responses[nc]
+            
+        #blank-out stimulus conditions that were not presented
+        condition_responses[:,:,0,0] = 0
+        condition_responses[:,:,2,0] = 0
+        condition_responses[:,:,4,0] = 0
+        condition_responses[:,:,0,1] = 0
+        condition_responses[:,:,2,1] = 0
+        condition_responses[:,:,4,1] = 0
         
-        cell_responses = condition_responses[nc] - blank_responses[nc]
-        cell_responses[:,0,0] = 0
-        cell_responses[:,2,0] = 0
-        cell_responses[:,4,0] = 0
-        cell_responses[:,0,1] = 0
-        cell_responses[:,2,1] = 0
-        cell_responses[:,4,1] = 0
+        population_responses = np.mean(condition_responses,axis=0)
         
         for i_size,size in enumerate(sizes):
             
-            
-            
             ax = plt.subplot(3,1,i_size+1)
-            ax.imshow(cell_responses[:,:,i_size],
+            ax.imshow(population_responses[:,:,i_size],
                       cmap='RdBu_r',
-                      vmin=-np.max(cell_responses),
-                      vmax=np.max(cell_responses),
+                      vmin=-np.max(population_responses),
+                      vmax=np.max(population_responses),
                       interpolation='none')
             
             ax.set_xticks(np.arange(len(contrasts)))
@@ -129,23 +124,71 @@ def plot_single_cell_tuning(condition_responses,blank_responses,p_vals,savepath)
             ax.set_yticks(np.arange(len(directions)))
             ax.set_yticklabels([str(int(x)) for x in directions])
             
-            if i_size==2:
-             ax.set_xlabel('Contrast')
             ax.set_ylabel('Direction')
+            ax.set_title('Size: '+str(size))
             
-            if i_size==0:
-                ax.set_title('Size: '+str(size)+' p_val: '+str(p_vals[nc]))
-            else:
-                ax.set_title('Size: '+str(size))
+            if i_size==2:
+                ax.set_xlabel('Contrast')
         
-        plt.savefig(savepath+'tuning_'+str(nc)+'.png',dpi=300)
+        plt.savefig(fig_filepath,dpi=300)
         plt.close()
+        
+def plot_single_cell_tuning(condition_responses,blank_responses,p_vals,savepath):
+    
+    num_neurons = condition_responses.shape[0]
+    directions, contrasts, sizes = grating_params()
+    
+    for nc in range(num_neurons):
+        
+        fig_filepath = savepath+'tuning_'+str(nc)+'.png'
+        if not os.path.isfile(fig_filepath):
+        
+            plt.figure(figsize=(10,10))
+            
+            cell_responses = condition_responses[nc] - blank_responses[nc]
+            cell_responses[:,0,0] = 0
+            cell_responses[:,2,0] = 0
+            cell_responses[:,4,0] = 0
+            cell_responses[:,0,1] = 0
+            cell_responses[:,2,1] = 0
+            cell_responses[:,4,1] = 0
+            
+            for i_size,size in enumerate(sizes):
+                
+                
+                
+                ax = plt.subplot(3,1,i_size+1)
+                ax.imshow(cell_responses[:,:,i_size],
+                          cmap='RdBu_r',
+                          vmin=-np.max(cell_responses),
+                          vmax=np.max(cell_responses),
+                          interpolation='none')
+                
+                ax.set_xticks(np.arange(len(contrasts)))
+                ax.set_xticklabels([str(int(100*x)) + '%' for x in contrasts])
+                ax.set_yticks(np.arange(len(directions)))
+                ax.set_yticklabels([str(int(x)) for x in directions])
+                
+                if i_size==2:
+                 ax.set_xlabel('Contrast')
+                ax.set_ylabel('Direction')
+                
+                if i_size==0:
+                    ax.set_title('Size: '+str(size)+' p_val: '+str(p_vals[nc]))
+                else:
+                    ax.set_title('Size: '+str(size))
+            
+            plt.savefig(fig_filepath,dpi=300)
+            plt.close()
 
 def load_dff_traces(exptpath):
     
     for f in os.listdir(exptpath):
         if f.find('_dff.h5') > -1:
             dff = np.array(h5py.File(exptpath+f,'r')['data'])
+            
+            #remove neurons with NaNs; these will get removed at event detection
+            # so this keeps dF/F consistent with future event timeseries
             no_nans = np.argwhere(np.sum(np.isnan(dff),axis=1)==0)[:,0]
             return dff[no_nans]
     return None
@@ -156,7 +199,13 @@ def get_frame_rate(stim_table,sweep_duration=2.0):
     
     return int(np.round(mean_sweep_frames / sweep_duration))
 
-def get_mean_sweep_response(dff,stim_table,frames_per_sec,savepath,stim_name,response_type,baseline_subtract=True):
+def get_mean_sweep_response(dff,
+                            stim_table,
+                            frames_per_sec,
+                            savepath,
+                            stim_name,
+                            response_type,
+                            baseline_subtract=True):
 
     savefile = savepath+stim_name+'_'+response_type+'_mean_sweep_responses.npy'
     sweep_savefile = savepath+stim_name+'_'+response_type+'_sweep_responses.npy'
@@ -193,7 +242,10 @@ def get_mean_sweep_response(dff,stim_table,frames_per_sec,savepath,stim_name,res
    
     return mean_sweep_response
     
-def chi_square_all_conditions(sweep_table,mean_sweep_events,session_ID,savepath):
+def chi_square_all_conditions(sweep_table,
+                              mean_sweep_events,
+                              session_ID,
+                              savepath):
     
     if os.path.isfile(savepath+str(session_ID)+'_chisq_all.npy'):
         p_vals = np.load(savepath+str(session_ID)+'_chisq_all.npy')
@@ -230,6 +282,11 @@ def compute_mean_condition_responses(sweep_table,mean_sweep_events):
     return condition_responses, blank_sweep_responses    
 
 def compute_blank_subtracted_NLL(session_ID,savepath,num_shuffles=200000):
+    
+    #not currently used, but useful to see how robust is the tuning
+    #calculates the percentile of the mean response of each neuron to each 
+    #stimulus condition in a bootstrapped distribution, then takes a log-tranform
+    #of the percentile (centering zero to be the median).
     
     if os.path.isfile(savepath+str(session_ID)+'_blank_subtracted_NLL.npy'):
         condition_NLL = np.load(savepath+str(session_ID)+'_blank_subtracted_NLL.npy')
@@ -336,8 +393,31 @@ def grating_params():
     sizes = [12.5,25,250]
     
     return directions, contrasts, sizes
-  
+ 
+def get_sweep_table_dict(session_ID,exptpath,savepath):
+    
+    filepath = savepath + str(session_ID) + '_sweep_table.h5'
+    if os.path.isfile(filepath):
+        sweep_table = {}
+        sweep_table['size_by_contrast'] = pd.read_hdf(filepath,key='size_by_contrast',mode='r')
+        sweep_table['visual_behavior_flashes'] = pd.read_hdf(filepath,key='visual_behavior_flashes',mode='r')
+    else:
+    
+        sweep_table = st.SizeByContrast_tables(exptpath)
+    
+        sweep_table['size_by_contrast'] = sweep_table_to_downsampled(sweep_table['size_by_contrast'])
+        sweep_table['visual_behavior_flashes'] = sweep_table_to_downsampled(sweep_table['visual_behavior_flashes'])
+    
+        sweep_table['size_by_contrast'].to_hdf(filepath,key='size_by_contrast')
+        sweep_table['visual_behavior_flashes'].to_hdf(filepath,key='visual_behavior_flashes')
+        
+    print(sweep_table)
+    
+    return sweep_table
+ 
 def sweep_table_to_downsampled(sweep_table,num_frames_averaged=2.0):
+    #returns sweep tables after accounting for the 2x downsampling in time done before LIMS upload.
+    #2P movies were too long for motion correction algorithm
     
     sweep_table['Start'] = sweep_table['Start'].values / num_frames_averaged
     sweep_table['End'] = sweep_table['End'].values / num_frames_averaged
@@ -345,6 +425,7 @@ def sweep_table_to_downsampled(sweep_table,num_frames_averaged=2.0):
     return sweep_table
 
 def get_session_df():
+    #returns list of all sessions in the dataset
     
     #                session_ID, cre, mouseID, day
     session_info = [(1143565396,'Vip',598130,3),
@@ -354,6 +435,11 @@ def get_session_df():
                     
                     (1144953459,'Vip',594263,6),
                     
+                    (1167563391,'Vip',616082,1),
+                    (1167772447,'Vip',616082,2),
+                    (1168059486,'Vip',616082,3),
+                    (1168585365,'Vip',616082,4),
+                    (1168874989,'Vip',616082,5),
                     (1169157869,'Vip',616082,6),
                     (1170175289,'Vip',616082,8),
                     (1170365425,'Vip',616082,9),
@@ -372,8 +458,15 @@ def get_session_df():
                     
                     (1145351299,'Sst',598892,2),
                     
+                    #(1161877197,'Sst',613523,1),
                     (1163170091,'Sst',613523,2),
                     (1163554066,'Sst',613523,3),
+                    (1164116253,'Sst',613523,4),
+                    (1164304690,'Sst',613523,5),
+                    #(1164527239,'Sst',613523,6),#NaNs in sweep_table, might not have completed stim
+                    (1164751594,'Sst',613523,7),
+                    (1164988867,'Sst',613523,8),
+                    #(1167079468,'Sst',613523,9),
                     
                     (1173180948,'Sst',615853,1),
                     (1173409438,'Sst',615853,2),
@@ -383,8 +476,12 @@ def get_session_df():
                     (1174750543,'Sst',615853,6),
                     (1175024638,'Sst',615853,7),
                     (1175250452,'Sst',615853,8),
-                    (1175478209,'Sst',615853,9),
+                    #(1175478209,'Sst',615853,9),
                     
+                    (1167398732,'Sst',615858,1),
+                    (1167912934,'Sst',615858,2),
+                    (1168092997,'Sst',615858,3),
+                    (1168986071,'Sst',615858,4),
                     (1169218245,'Sst',615858,5),
                     (1175323842,'Sst',615858,6),
                     (1170214686,'Sst',615858,7),
@@ -394,13 +491,13 @@ def get_session_df():
                     (1173918056,'Sst',618935,1),
                     (1174492415,'Sst',618935,2),
                     (1175219013,'Sst',618935,3),
-                    (1175447089,'Sst',618935,4),
-                    (1176085819,'Sst',618935,5),
+                    #(1175447089,'Sst',618935,4),#processing stalled.
+                    #(1176085819,'Sst',618935,5),#processing stalled.
                     (1176338780,'Sst',618935,6),
                     (1176522368,'Sst',618935,7),
                     (1176743288,'Sst',618935,8),
-                    
-                    
+                    #(1176945224,'Sst',618935,9),#processing stalled. 
+                       
                     ]
     
     session_df = pd.DataFrame(data=np.zeros((len(session_info),4)),
@@ -421,20 +518,7 @@ def to_exptpath(datapath,cre,mouse_ID,day):
     return exptpath
 
 if __name__=='__main__':  
-    
-    datapath = '/Users/danielm/Desktop/stim_sessions/'
-    
-    session_df = get_session_df()
-
-    for index, row in session_df.iterrows():
-        exptpath = to_exptpath(datapath,
-                               row['cre_line'],
-                               int(row['mouse_ID']),
-                               int(row['Day'])
-                               )
-        
-        print(exptpath)
-        #whole_trick(exptpath,row['session_ID'])
+    main()
     
     
     
