@@ -28,6 +28,8 @@ def main():
         day = int(row['Day'])
         session_ID = int(row['session_ID'])
         
+        #the analysis assumes that the stim.pkl, sync.h5 and dff.h5 files 
+        #are all located in the same directory, called exptpath
         exptpath = to_exptpath(datapath,
                                row['cre_line'],
                                MID,
